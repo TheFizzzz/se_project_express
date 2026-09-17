@@ -1,0 +1,23 @@
+const BAD_REQUEST = 400;
+const NOT_FOUND = 404;
+const INTERNAL_SERVER_ERROR = 500;
+
+const handleError = (err, req, res, next) => {
+  if (res.headersSent) return next(err);
+
+  if (err.name === "ValidationError" || err.name === "CastError") {
+    return res.status(BAD_REQUEST).send({
+      message: "Invalid request data or ID",
+    });
+  }
+
+  if (err.type === "entity.parse.failed") {
+    return res.status(BAD_REQUEST).send({ message: "Invalid JSON body" });
+  }
+
+  return res.status(INTERNAL_SERVER_ERROR).send({
+    message: "An error has occurred on the server.",
+  });
+};
+
+module.exports = { BAD_REQUEST, NOT_FOUND, INTERNAL_SERVER_ERROR, handleError };
