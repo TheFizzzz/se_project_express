@@ -1,117 +1,174 @@
 # WTWR (What to Wear?): Back End
 
-An Express API for the WTWR clothing application. Users can create profiles, add
-clothing for hot, warm, or cold weather, browse items, delete items, and like or
-unlike them. MongoDB stores profiles and clothing items between server restarts.
+The WTWR API stores weather-based clothing suggestions and user profiles.
+Sprint 13 adds email/password signup, JWT login, private profile access, profile
+updates, and ownership checks. Anyone can browse clothing; signed-in users can
+create items and like or unlike them. Only the owner can delete an item.
 
-Built with Node.js, Express 4, Mongoose 8, and MongoDB. Mongoose schemas validate
-required fields, name lengths, and weather categories; validator checks image
-URLs. Atomic MongoDB updates prevent duplicate likes. Routes, controllers, and
-models are organized separately, with shared JSON error handling. ESLint uses the
-Airbnb base configuration, Prettier formats code, and nodemon enables hot reload.
+## Technologies and techniques
 
-## Local setup
+- Node.js, Express 4, MongoDB, and Mongoose 8.
+- Required schema fields, weather enums, and validator email/URL validation.
+- bcryptjs password hashing with a cost factor of 10; password hashes are hidden
+  from queries and signup responses.
+- jsonwebtoken tokens with a seven-day lifetime and Bearer authorization.
+- Atomic likes and unique email indexes, including duplicate-email handling.
+- CORS, centralized JSON error responses, and separated routes/controllers/models.
+- Airbnb ESLint, Prettier, nodemon, and Node's built-in integration test runner.
 
-Use Node.js 22 or newer and a running MongoDB installation.
+## Setup
+
+Use Node.js 22 or newer and a running MongoDB server.
 
 ```bash
 npm ci
-npm run start
+npm run dev
 ```
 
-The API defaults to `http://localhost:3001` and connects to
-`mongodb://127.0.0.1:27017/wtwr_db`. Override these settings with environment
-variables when launching the server:
+The server defaults to `http://localhost:3001` and
+`mongodb://127.0.0.1:27017/wtwr_db`. It starts listening after MongoDB connects and
+the unique email index is ready.
 
-```bash
-PORT=3002 MONGODB_URI=mongodb://127.0.0.1:27017/wtwr_db npm run start
-```
-
-If MongoDB is installed but no local service is running, start a project-local
-database from this directory in another terminal:
+If no MongoDB service is running, start the project-local database in another
+terminal from the project directory:
 
 ```bash
 mkdir -p .mongodb logs
 mongod --dbpath .mongodb --bind_ip 127.0.0.1 --port 27017 --logpath logs/mongodb.log
 ```
 
-Database files and logs are ignored by Git. The server begins listening after
-the database connection succeeds.
+These database files and logs are excluded from Git. Do not start another MongoDB
+instance if port 27017 is already in use. Likewise, run only one API server on
+port 3001.
+
+Configuration is read from environment variables:
+
+| Variable      | Default / use                                                                       |
+| ------------- | ----------------------------------------------------------------------------------- |
+| `PORT`        | `3001`                                                                              |
+| `MONGODB_URI` | `mongodb://127.0.0.1:27017/wtwr_db`                                                 |
+| `JWT_SECRET`  | Development-only fallback in `utils/config.js`; set a private secret for deployment |
+| `NODE_ENV`    | With `production`, startup requires an explicit `JWT_SECRET`                        |
+
+Set environment variables in the shell before starting the server. A `.env` file
+is not loaded automatically. Changing `JWT_SECRET` invalidates existing tokens.
 
 ## Commands
 
-| Command          | Purpose                                         |
-| ---------------- | ----------------------------------------------- |
-| `npm run start`  | Start the server on port 3001 by default        |
-| `npm run dev`    | Start with automatic restarts on code changes   |
-| `npm run lint`   | Check code with ESLint                          |
-| `npm run format` | Format project files with Prettier              |
-| `npm test`       | Run API integration tests against local MongoDB |
-
-Install the **EditorConfig for VS Code** extension if using VS Code or Cursor,
-then restart the editor to apply the supplied `.editorconfig` settings.
+| Command                  | Purpose                               |
+| ------------------------ | ------------------------------------- |
+| `npm run start`          | Start the API                         |
+| `npm run dev`            | Start with hot reload                 |
+| `npm run lint`           | Run ESLint                            |
+| `npx prettier --check .` | Check formatting                      |
+| `npm run format`         | Format project files                  |
+| `npm test`               | Run isolated MongoDB-backed API tests |
 
 ## API
 
-Send request bodies as JSON with `Content-Type: application/json`.
-Successful list requests return arrays; individual requests return documents.
-Creation returns `201`; other successful operations return `200`.
+Use JSON request bodies. Creation returns `201`; other successful API requests
+return `200`. Errors contain only a `message` field.
 
-| Method | Route                  | Description                                           |
-| ------ | ---------------------- | ----------------------------------------------------- |
-| GET    | `/users`               | List users                                            |
-| GET    | `/users/:userId`       | Get a user                                            |
-| POST   | `/users`               | Create a user with `name` and `avatar`                |
-| GET    | `/items`               | List clothing items                                   |
-| POST   | `/items`               | Create an item with `name`, `weather`, and `imageUrl` |
-| DELETE | `/items/:itemId`       | Delete an item                                        |
-| PUT    | `/items/:itemId/likes` | Like an item once per user                            |
-| DELETE | `/items/:itemId/likes` | Remove the user's like                                |
+| Method | Route                  | Access        | Body / action                                     |
+| ------ | ---------------------- | ------------- | ------------------------------------------------- |
+| POST   | `/signup`              | Public        | `name`, `avatar`, `email`, `password`             |
+| POST   | `/signin`              | Public        | `email`, `password`; returns `{ "token": "..." }` |
+| GET    | `/items`               | Public        | Returns an array of clothing items                |
+| GET    | `/users/me`            | Bearer token  | Returns the signed-in user's profile              |
+| PATCH  | `/users/me`            | Bearer token  | Updates only `name` and/or `avatar`               |
+| POST   | `/items`               | Bearer token  | `name`, `weather`, `imageUrl`                     |
+| DELETE | `/items/:itemId`       | Owner's token | Deletes the item                                  |
+| PUT    | `/items/:itemId/likes` | Bearer token  | Adds the current user's like once                 |
+| DELETE | `/items/:itemId/likes` | Bearer token  | Removes the current user's like                   |
 
-Names must contain 2–30 characters. Weather must be `hot`, `warm`, or `cold`.
-Image URLs must be valid HTTP or HTTPS URLs. Item ownership comes from the
-temporary authorization middleware. New items have no likes and use the current
-date for `createdAt`.
+Names must be 2–30 characters. Weather is `hot`, `warm`, or `cold`. Image URLs
+must use HTTP or HTTPS. Emails are trimmed and lowercased before storage and
+login. Passwords must be nonempty strings of at most 72 UTF-8 bytes, avoiding
+bcrypt's silent truncation of longer inputs.
 
-Example user creation:
+The old `/users` listing/creation and `/users/:userId` lookup routes are removed.
+Item ownership comes from the verified token, never the submitted request body.
 
-```bash
-curl -X POST http://localhost:3001/users -H 'Content-Type: application/json' -d '{"name":"Test User","avatar":"https://example.com/avatar.png"}'
-```
+## Testing manually in Postman
 
-Example clothing item creation:
+Leave `npm run dev` running. Enter URLs without trailing spaces or line breaks.
 
-```bash
-curl -X POST http://localhost:3001/items -H 'Content-Type: application/json' -d '{"name":"Winter coat","weather":"cold","imageUrl":"https://example.com/coat.png"}'
-```
+1. Send **POST** `http://localhost:3001/signup`, with **Body → raw → JSON**:
 
-Errors return a JSON object containing only `message`:
+   ```json
+   {
+     "name": "Test User",
+     "avatar": "https://example.com/avatar.png",
+     "email": "tester@example.com",
+     "password": "Example-password-123"
+   }
+   ```
 
-- `400`: Invalid input, malformed JSON, or invalid ObjectId.
-- `404`: Missing user/item or unknown route.
-- `500`: Unexpected failure, with `An error has occurred on the server.`
+   Expect `201` and a user object with no password or hash.
 
-Unknown routes return `{"message":"Requested resource not found"}`.
+2. Send **POST** `http://localhost:3001/signin`:
 
-## Temporary authorization (Sprint 12)
+   ```json
+   {
+     "email": "tester@example.com",
+     "password": "Example-password-123"
+   }
+   ```
 
-Every request uses the test user ID `6aabdca4b4ec4d6640a397d8` in `app.js`.
-This user was created through `POST /users` in the local `wtwr_db` database.
-On a fresh database, create your own test user using the example request above
-and replace the ID in `app.js` with the returned `_id`.
+   Expect `200`. Copy the token string from the response, without quotation marks.
 
-Real login, passwords, tokens, and ownership-based access restrictions are not
-implemented in this sprint. The middleware is a temporary development solution.
+3. For protected requests, select **Authorization → Bearer Token**, and paste the
+   token in the Token field. Postman adds the `Authorization: Bearer ...` header.
+   Send **GET** `http://localhost:3001/users/me` with **Body → none**.
 
-## Verification
+4. Send **PATCH** to the same URL with a JSON body such as
+   `{ "name": "Updated User", "avatar": "https://example.com/new.png" }`.
+   Expect the updated profile, without its password.
 
-`npm test` checks user and item creation, validation, retrieval, deletion,
-duplicate likes, unlikes, invalid IDs, missing records, malformed JSON, and
-unexpected server errors. It creates a uniquely named `wtwr_test_*` database on
-local MongoDB and removes it afterward, leaving `wtwr_db` untouched.
+5. Create an item using **POST** `http://localhost:3001/items` with your token:
 
-The original `.github` test workflow is preserved. `sprint.txt` is set to
-`12-ft` to match the provided full-time Sprint 12 criteria. GitHub runs the
-course tests when changes are pushed to `main`.
+   ```json
+   {
+     "name": "Winter coat",
+     "weather": "cold",
+     "imageUrl": "https://example.com/coat.png"
+   }
+   ```
+
+   Save its `_id`. Use it for likes and deletion as listed in the API table.
+
+See [SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md) for negative tests,
+GitHub checks, and the pitch-video demonstration outline.
+
+[Pitch Video:] (https://drive.google.com/file/d/1fu0eoJvMIlSFtOjyTYmm1r5R_WBX6f3s/view?usp=sharing)
+
+## Errors
+
+| Status | Meaning                                                                |
+| ------ | ---------------------------------------------------------------------- |
+| `400`  | Invalid input, ObjectId, or malformed JSON                             |
+| `401`  | Incorrect credentials, missing authorization, or invalid/expired token |
+| `403`  | Attempt to delete another user's item                                  |
+| `404`  | Missing user/item or unknown route with valid authorization            |
+| `409`  | Email is already registered                                            |
+| `500`  | Unexpected failure: `An error has occurred on the server.`             |
+
+Only signup, signin, and item listing are public. Unknown protected paths without
+a valid token are rejected by authorization first.
+
+## Database transition and verification
+
+Sprint 12 users lack credentials. Before upgrading an existing database,
+archive old test collections or migrate their accounts so the unique email index
+can be created. Do not drop data you need. Archived collections are separate from
+the active `users` and `clothingitems` collections; create new accounts via signup.
+
+`npm test` creates and removes a uniquely named `wtwr_test_*` database, leaving
+`wtwr_db` and its archives untouched. It covers password hashing/privacy, login,
+JWT lifetime, invalid tokens, unique emails, profile validation, ownership,
+likes, CORS, and error responses.
+
+The original `.github` workflow is preserved. `sprint.txt` is now `13`, enabling
+the Sprint 13 course tests on pushes to `main`.
 
 Repository: [TheFizzzz/se_project_express](https://github.com/TheFizzzz/se_project_express)

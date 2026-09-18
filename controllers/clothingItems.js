@@ -1,5 +1,5 @@
 const ClothingItem = require("../models/clothingItem");
-const { NOT_FOUND } = require("../utils/errors");
+const { NOT_FOUND, FORBIDDEN, createError } = require("../utils/errors");
 
 const sendItem = (item, res) => {
   if (!item) {
@@ -21,7 +21,20 @@ module.exports.createClothingItem = (req, res, next) => {
 };
 
 module.exports.deleteItem = (req, res, next) =>
-  ClothingItem.findByIdAndDelete(req.params.itemId)
+  ClothingItem.findById(req.params.itemId)
+    .then((item) => {
+      if (!item) throw createError(NOT_FOUND, "Clothing item not found");
+      if (item.owner.toString() !== req.user._id) {
+        throw createError(
+          FORBIDDEN,
+          "You can only delete your own clothing items"
+        );
+      }
+      return ClothingItem.findOneAndDelete({
+        _id: item._id,
+        owner: req.user._id,
+      });
+    })
     .then((item) => sendItem(item, res))
     .catch(next);
 
