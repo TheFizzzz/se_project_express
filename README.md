@@ -1,9 +1,17 @@
 # WTWR (What to Wear?): Back End
 
 The WTWR API stores weather-based clothing suggestions and user profiles.
-Sprint 13 adds email/password signup, JWT login, private profile access, profile
-updates, and ownership checks. Anyone can browse clothing; signed-in users can
-create items and like or unlike them. Only the owner can delete an item.
+Sprint 15 adds centralized errors, Celebrate request validation, Winston logging,
+environment-based secrets, and PM2 crash recovery to the authenticated API from
+Sprint 13. Anyone can browse clothing; signed-in users can create items and like
+or unlike them. Only the owner can delete an item.
+
+## Project access
+
+- Deployed application: [hunter-wtwr.duckdns.org](https://hunter-wtwr.duckdns.org)
+- Deployed API: [hunter-wtwr-api.duckdns.org](https://hunter-wtwr-api.duckdns.org/items)
+- Frontend repository: [TheFizzzz/se_project_react](https://github.com/TheFizzzz/se_project_react)
+- [Project pitch video](https://drive.google.com/file/d/1fu0eoJvMIlSFtOjyTYmm1r5R_WBX6f3s/view?usp=sharing)
 
 ## Technologies and techniques
 
@@ -50,8 +58,9 @@ Configuration is read from environment variables:
 | `JWT_SECRET`  | Development-only fallback in `utils/config.js`; set a private secret for deployment |
 | `NODE_ENV`    | With `production`, startup requires an explicit `JWT_SECRET`                        |
 
-Set environment variables in the shell before starting the server. A `.env` file
-is not loaded automatically. Changing `JWT_SECRET` invalidates existing tokens.
+Copy `.env.example` to `.env`, replace its example secret, and adjust the other
+values if necessary. The server loads `.env` automatically. The file is ignored
+by Git; never commit it. Changing `JWT_SECRET` invalidates existing tokens.
 
 ## Commands
 
@@ -59,6 +68,9 @@ is not loaded automatically. Changing `JWT_SECRET` invalidates existing tokens.
 | ------------------------ | ------------------------------------- |
 | `npm run start`          | Start the API                         |
 | `npm run dev`            | Start with hot reload                 |
+| `npm run start:pm2`      | Start the API under PM2               |
+| `npm run stop:pm2`       | Stop the PM2-managed API              |
+| `npm run test:recovery`  | Prove `/crash-test` is restarted      |
 | `npm run lint`           | Run ESLint                            |
 | `npx prettier --check .` | Check formatting                      |
 | `npm run format`         | Format project files                  |
@@ -80,6 +92,7 @@ return `200`. Errors contain only a `message` field.
 | DELETE | `/items/:itemId`       | Owner's token | Deletes the item                                  |
 | PUT    | `/items/:itemId/likes` | Bearer token  | Adds the current user's like once                 |
 | DELETE | `/items/:itemId/likes` | Bearer token  | Removes the current user's like                   |
+| GET    | `/crash-test`          | Public        | Intentionally crashes the review server           |
 
 Names must be 2–30 characters. Weather is `hot`, `warm`, or `cold`. Image URLs
 must use HTTP or HTTPS. Emails are trimmed and lowercased before storage and
@@ -140,7 +153,34 @@ Leave `npm run dev` running. Enter URLs without trailing spaces or line breaks.
 See [SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md) for negative tests,
 GitHub checks, and the pitch-video demonstration outline.
 
-[Pitch Video:] (https://drive.google.com/file/d/1fu0eoJvMIlSFtOjyTYmm1r5R_WBX6f3s/view?usp=sharing)
+## Local deployment substitute
+
+This setup tests the VM-specific parts of the deployment without Google Cloud.
+It covers MongoDB, production environment variables, PM2 supervision, intentional
+process crashes, HTTP-to-HTTPS redirection, TLS termination, and nginx proxying.
+It does not create public DNS or a trusted Let's Encrypt certificate.
+
+1. Start the local MongoDB command shown in **Setup**.
+2. Create `.env` from `.env.example` and replace `JWT_SECRET` with a random value.
+3. Run `npm run test:recovery`. A passing run prints the old and replacement PIDs.
+4. To test nginx on this CachyOS/Arch machine, install nginx with your normal
+   system administration account, then run:
+
+   ```bash
+   bash scripts/create-local-certificate.sh
+   nginx -p "$PWD/" -c deploy/nginx.local.conf
+   curl -k https://localhost:8443/items
+   nginx -p "$PWD/" -c deploy/nginx.local.conf -s stop
+   ```
+
+   Port `8080` redirects to HTTPS on `8443`. The certificate is self-signed and
+   is stored under ignored `.local-deploy/`; browser warnings are expected.
+
+For the final review, use a real internet-reachable Linux VM (Google Cloud or a
+course-approved alternative), point the frontend and API subdomains to it, and
+replace the local nginx certificate with a trusted certificate. Do not deploy
+`deploy/nginx.local.conf` unchanged because its ports and certificate are only
+for local testing.
 
 ## Errors
 
@@ -171,4 +211,4 @@ likes, CORS, and error responses.
 The original `.github` workflow is preserved. `sprint.txt` is now `13`, enabling
 the Sprint 13 course tests on pushes to `main`.
 
-Repository: [TheFizzzz/se_project_express](https://github.com/TheFizzzz/se_project_express)
+Backend repository: [TheFizzzz/se_project_express](https://github.com/TheFizzzz/se_project_express)

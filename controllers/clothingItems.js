@@ -1,9 +1,9 @@
 const ClothingItem = require("../models/clothingItem");
-const { NOT_FOUND, FORBIDDEN, createError } = require("../utils/errors");
+const { BadRequestError, NotFoundError, ForbiddenError } = require("../errors");
 
 const sendItem = (item, res) => {
   if (!item) {
-    return res.status(NOT_FOUND).send({ message: "Clothing item not found" });
+    throw new NotFoundError("Clothing item not found");
   }
   return res.send(item);
 };
@@ -17,18 +17,20 @@ module.exports.createClothingItem = (req, res, next) => {
   const { name, weather, imageUrl } = req.body;
   return ClothingItem.create({ name, weather, imageUrl, owner: req.user._id })
     .then((item) => res.status(201).send(item))
-    .catch(next);
+    .catch((err) => {
+      if (err.name === "ValidationError" || err.name === "CastError") {
+        return next(new BadRequestError("Invalid request data or ID"));
+      }
+      return next(err);
+    });
 };
 
 module.exports.deleteItem = (req, res, next) =>
   ClothingItem.findById(req.params.itemId)
     .then((item) => {
-      if (!item) throw createError(NOT_FOUND, "Clothing item not found");
+      if (!item) throw new NotFoundError("Clothing item not found");
       if (item.owner.toString() !== req.user._id) {
-        throw createError(
-          FORBIDDEN,
-          "You can only delete your own clothing items"
-        );
+        throw new ForbiddenError("You can only delete your own clothing items");
       }
       return ClothingItem.findOneAndDelete({
         _id: item._id,
@@ -36,7 +38,14 @@ module.exports.deleteItem = (req, res, next) =>
       });
     })
     .then((item) => sendItem(item, res))
-    .catch(next);
+    .catch((err) => {
+      if (err.name === "CastError") {
+        return next(
+          new BadRequestError("The id string is in an invalid format")
+        );
+      }
+      return next(err);
+    });
 
 module.exports.likeItem = (req, res, next) =>
   ClothingItem.findByIdAndUpdate(
@@ -45,7 +54,14 @@ module.exports.likeItem = (req, res, next) =>
     { new: true, runValidators: true }
   )
     .then((item) => sendItem(item, res))
-    .catch(next);
+    .catch((err) => {
+      if (err.name === "CastError") {
+        return next(
+          new BadRequestError("The id string is in an invalid format")
+        );
+      }
+      return next(err);
+    });
 
 module.exports.dislikeItem = (req, res, next) =>
   ClothingItem.findByIdAndUpdate(
@@ -54,4 +70,11 @@ module.exports.dislikeItem = (req, res, next) =>
     { new: true, runValidators: true }
   )
     .then((item) => sendItem(item, res))
-    .catch(next);
+    .catch((err) => {
+      if (err.name === "CastError") {
+        return next(
+          new BadRequestError("The id string is in an invalid format")
+        );
+      }
+      return next(err);
+    });

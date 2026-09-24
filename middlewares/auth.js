@@ -1,11 +1,11 @@
 const jwt = require("jsonwebtoken");
 const { JWT_SECRET } = require("../utils/config");
-const { UNAUTHORIZED, createError } = require("../utils/errors");
+const { UnauthorizedError } = require("../errors");
 
 module.exports = (req, res, next) => {
   const { authorization } = req.headers;
   if (!authorization || !authorization.startsWith("Bearer ")) {
-    return next(createError(UNAUTHORIZED, "Authorization required"));
+    return next(new UnauthorizedError("Authorization required"));
   }
   try {
     const token = authorization.replace("Bearer ", "");
@@ -15,13 +15,13 @@ module.exports = (req, res, next) => {
       typeof payload._id !== "string" ||
       !/^[a-f0-9]{24}$/i.test(payload._id)
     ) {
-      return next(createError(UNAUTHORIZED, "Invalid authorization token"));
+      return next(new UnauthorizedError("Invalid authorization token"));
     }
     req.user = payload;
     return next();
   } catch (err) {
     return next(
-      createError(UNAUTHORIZED, "Invalid or expired authorization token")
+      new UnauthorizedError("Invalid or expired authorization token")
     );
   }
 };

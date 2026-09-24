@@ -1,4 +1,4 @@
-# Sprint 13 submission checklist
+# Sprint 15 submission checklist
 
 ## Automated checks
 
@@ -8,15 +8,17 @@ Run from the project directory with MongoDB running:
 npm run lint
 npx prettier --check .
 npm test
+npm run test:recovery
 ```
 
 - [x] ESLint exits without errors or warnings.
 - [x] Prettier reports that all matched files use its code style.
 - [x] All 16 reported integration tests pass.
+- [x] PM2 restarts the API after a request to `/crash-test`.
 - [x] Official course configuration checker passes locally.
 - [x] Official Sprint 13 Postman collection passes locally: 102 assertions, 41 requests.
 
-Verified on September 18, 2026. Rerun these checks after further code changes;
+Verified on September 21, 2026. Rerun these checks after further code changes;
 the local course run does not replace checking GitHub Actions after pushing.
 
 ## Postman checks
@@ -48,7 +50,13 @@ Start `npm run dev`. Use **Body → raw → JSON** for JSON requests and
 ## Submission
 
 - [x] Confirm `sprint.txt` contains `13`.
-- [ ] Review `git diff` and `git status`; database files, logs, and secrets must
+- [x] Replace the deployed-domain TODO in `README.md` with the public domain.
+- [x] Add the frontend repository and pitch-video links to `README.md`.
+- [x] Confirm the frontend GitHub repository is public.
+- [x] Confirm `/crash-test` crashes the deployed process and PM2 restores it.
+- [x] Confirm both public subdomains, nginx redirects, and trusted HTTPS work.
+- [x] Confirm the server's `.env` contains secrets and is not tracked by Git.
+- [x] Review `git diff` and `git status`; database files, logs, and secrets must
       remain ignored.
 - [ ] Commit and push the reviewed changes to `main`.
 - [ ] Confirm the latest GitHub Actions course workflow passes. If a course test

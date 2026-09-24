@@ -17,5 +17,7 @@ node_modules
 # Local configuration and generated coverage
 .env
 .env.*
+!.env.example
 coverage
 .mongodb
+.local-deploy

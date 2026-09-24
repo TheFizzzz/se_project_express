@@ -2,10 +2,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 const { JWT_SECRET } = require("../utils/config");
-const { BAD_REQUEST, NOT_FOUND, createError } = require("../utils/errors");
+const { BadRequestError, NotFoundError, ConflictError } = require("../errors");
 
 const sendUser = (user, res) => {
-  if (!user) throw createError(NOT_FOUND, "User not found");
+  if (!user) throw new NotFoundError("User not found");
   return res.send(user);
 };
 
@@ -17,8 +17,7 @@ module.exports.createUser = async (req, res, next) => {
       !password ||
       Buffer.byteLength(password, "utf8") > 72
     ) {
-      throw createError(
-        BAD_REQUEST,
+      throw new BadRequestError(
         "Password must be a nonempty string of at most 72 UTF-8 bytes"
       );
     }
@@ -30,6 +29,12 @@ module.exports.createUser = async (req, res, next) => {
     delete result.password;
     return res.status(201).send(result);
   } catch (err) {
+    if (err.name === "ValidationError" || err.name === "CastError") {
+      return next(new BadRequestError("Invalid request data or ID"));
+    }
+    if (err.code === 11000) {
+      return next(new ConflictError("Email is already registered"));
+    }
     return next(err);
   }
 };
@@ -42,9 +47,7 @@ module.exports.login = (req, res, next) => {
     typeof password !== "string" ||
     !password
   ) {
-    return next(
-      createError(BAD_REQUEST, "Email and password are required strings")
-    );
+    return next(new BadRequestError("Email and password are required strings"));
   }
   return User.findUserByCredentials(email, password)
     .then((user) => {
@@ -72,5 +75,10 @@ module.exports.updateUser = (req, res, next) => {
     { new: true, runValidators: true }
   )
     .then((user) => sendUser(user, res))
-    .catch(next);
+    .catch((err) => {
+      if (err.name === "ValidationError" || err.name === "CastError") {
+        return next(new BadRequestError("Invalid request data or ID"));
+      }
+      return next(err);
+    });
 };

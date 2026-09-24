@@ -44,7 +44,20 @@ test("Sprint 13 authentication and API integration", async (t) => {
   };
   const expectError = (response, status) => {
     assert.equal(response.status, status, JSON.stringify(response.body));
-    assert.deepEqual(Object.keys(response.body), ["message"]);
+    if (response.body.validation) {
+      assert.equal(status, 400);
+      assert.deepEqual(Object.keys(response.body), [
+        "statusCode",
+        "error",
+        "message",
+        "validation",
+      ]);
+      assert.equal(response.body.statusCode, 400);
+      assert.equal(response.body.error, "Bad Request");
+      assert.ok(Object.keys(response.body.validation).length > 0);
+    } else {
+      assert.deepEqual(Object.keys(response.body), ["message"]);
+    }
     assert.equal(typeof response.body.message, "string");
   };
   const noPassword = (body) =>
