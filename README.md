@@ -11,7 +11,7 @@ or unlike them. Only the owner can delete an item.
 - Deployed application: [hunter-wtwr.duckdns.org](https://hunter-wtwr.duckdns.org)
 - Deployed API: [hunter-wtwr-api.duckdns.org](https://hunter-wtwr-api.duckdns.org/items)
 - Frontend repository: [TheFizzzz/se_project_react](https://github.com/TheFizzzz/se_project_react)
-- [Project pitch video](https://drive.google.com/file/d/1fu0eoJvMIlSFtOjyTYmm1r5R_WBX6f3s/view?usp=sharing)
+- [Project pitch video](https://drive.google.com/file/d/11GAyba7y590V7fMmkLBDY-iS9tmNDPXw/view?usp=sharing)
 
 ## Technologies and techniques
 
